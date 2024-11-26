@@ -1,0 +1,80 @@
+Map.centerObject(geometry);  
+// Define a date range
+var startDate = '2013-01-01';
+var endDate = '2023-12-29';
+
+// Load Landsat 8 surface reflectance data
+var collection = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
+                  .filterBounds(geometry)
+                  .filterDate(startDate, endDate)
+                  .filter(ee.Filter.lessThan('CLOUD_COVER', 20));
+
+// Function to calculate MNDWI
+var calculateMNDWI = function(image) {
+  var nir = image.select('SR_B5'); // NIR band
+  var swir = image.select('SR_B6'); // SWIR band
+  var mndwi = nir.subtract(swir).divide(nir.add(swir)).rename('MNDWI');
+  return image.addBands(mndwi);
+};
+
+// Map the MNDWI function over the collection
+var mndwiCollection = collection.map(calculateMNDWI);
+
+// Create a time series chart of MNDWI
+var chart = ui.Chart.image.series({
+  imageCollection: mndwiCollection.select('MNDWI'),
+  region: geometry,
+  reducer: ee.Reducer.max(),
+  scale: 30
+}).setOptions({
+  title: 'MNDWI Time Series',
+  hAxis: {title: 'Date'},
+  vAxis: {title: 'MNDWI'},
+  lineWidth: 1,
+  pointSize: 3
+});
+
+// Display the chart
+print(chart);
+
+//////////////////////////////   ////////////////////////////////
+
+
+
+// Define a function to calculate water area for each image in the collection
+var calculateWaterArea = function(image) {
+  // Get the timestamp of the image
+  var timestamp = ee.Date(image.get('system:time_start'));
+
+  // Threshold the MNDWI to create a binary water mask
+  var waterMask = image.select('MNDWI').gt(0);
+
+  // Compute the area of water
+  var waterArea = waterMask.reduceRegion({
+    reducer: ee.Reducer.sum(),
+    geometry: geometry,
+    scale: 30,
+    maxPixels: 1e9
+  }).get('MNDWI');
+
+  // Create a feature with properties for timestamp and water area
+  var feature = ee.Feature(null, {
+    'timestamp': timestamp,
+    'water_area': waterArea
+  });
+
+  return feature;
+};
+
+// Map the calculateWaterArea function over the collection
+var waterAreas = mndwiCollection.map(calculateWaterArea);
+
+// Print the water areas for each image
+print('Water areas for each image:', waterAreas);
+
+// Export the water areas to a CSV file
+Export.table.toDrive({
+  collection: waterAreas,
+  description: 'water_areas_by_time',
+  fileFormat: 'CSV'
+});
