@@ -52,5 +52,3 @@ Calculate the Surface Water Area using Sentinel-2 by MNDWI index in GEE
     - `fileFormat: 'CSV'`: Specifies the output file format as CSV.
 
 
-This comprehensive explanation should help you understand the code's functionality and purpose.  Let me know if you have further questions.
-
