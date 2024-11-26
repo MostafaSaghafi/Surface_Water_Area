@@ -3,52 +3,163 @@ Calculate the Surface Water Area using Sentinel-2 by MNDWI index in GEE
 
 ------
 
-**Part 1: Calculating and Charting MNDWI**
+### **1. Center the Map on the Geometry**
+```javascript
+Map.centerObject(geometry);
+```
+- **Purpose**: Centers the map view on the `geometry` object (a region of interest, such as a polygon or point).
+- **`geometry`**: A variable that represents the area of interest. It must be defined elsewhere in the script.
 
-1. **`Map.centerObject(geometry);`**: This line centers the map view on the region of interest defined by the `geometry` variable.  `geometry` is assumed to be a previously defined object representing the area of interest (e.g., a polygon or point).
+---
 
-2. **`var startDate = '2013-01-01';`** and **`var endDate = '2023-12-29';`**: These lines define the start and end dates for filtering the Landsat imagery.
+### **2. Define a Date Range**
+```javascript
+var startDate = '2013-01-01';
+var endDate = '2023-12-29';
+```
+- **Purpose**: Sets the start and end dates for filtering satellite images.
+- **`startDate` and `endDate`**: Strings representing the time range for the analysis.
 
-3. **`var collection = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")...`**: This section loads Landsat 8 Collection 2 Level 2 surface reflectance data. It filters the data based on several criteria:
-    - `.filterBounds(geometry)`: Filters the collection to include only images that intersect the specified `geometry`.
-    - `.filterDate(startDate, endDate)`: Filters the collection to include only images within the specified date range.
-    - `.filter(ee.Filter.lessThan('CLOUD_COVER', 20))`: Filters the collection further, keeping only images with less than 20% cloud cover.
+---
 
-4. **`var calculateMNDWI = function(image) { ... };`**: This defines a function called `calculateMNDWI` that takes a single Landsat image as input and calculates the Modified Normalized Difference Water Index (MNDWI).
-    - `var nir = image.select('SR_B5');`: Selects the Near-Infrared (NIR) band (Band 5).
-    - `var swir = image.select('SR_B6');`: Selects the Shortwave Infrared (SWIR) band (Band 6).
-    - `var mndwi = nir.subtract(swir).divide(nir.add(swir)).rename('MNDWI');`: Calculates the MNDWI using the formula: (NIR - SWIR) / (NIR + SWIR) and renames the resulting band to 'MNDWI'.
-    - `return image.addBands(mndwi);`: Adds the calculated MNDWI band to the original image and returns the modified image.
+### **3. Load Landsat 8 Surface Reflectance Data**
+```javascript
+var collection = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
+                  .filterBounds(geometry)
+                  .filterDate(startDate, endDate)
+                  .filter(ee.Filter.lessThan('CLOUD_COVER', 20));
+```
+- **`ee.ImageCollection`**: Loads a dataset of Landsat 8 surface reflectance images.
+- **`.filterBounds(geometry)`**: Filters the images to include only those that intersect with the `geometry` region.
+- **`.filterDate(startDate, endDate)`**: Filters the images to include only those captured within the specified date range.
+- **`.filter(ee.Filter.lessThan('CLOUD_COVER', 20))`**: Filters the images to include only those with less than 20% cloud cover (to ensure clearer images).
 
-5. **`var mndwiCollection = collection.map(calculateMNDWI);`**: This line applies the `calculateMNDWI` function to every image in the `collection`.  The result is a new collection, `mndwiCollection`, where each image now has an additional band containing the MNDWI.
+---
 
-6. **`var chart = ui.Chart.image.series({ ... });`**: This creates a time series chart of MNDWI values.
-    - `imageCollection: mndwiCollection.select('MNDWI')`: Specifies the image collection and the band ('MNDWI') to use for the chart.
-    - `region: geometry`: Defines the region over which to calculate the MNDWI values.
-    - `reducer: ee.Reducer.max()`: Uses the maximum MNDWI value within the region for each image.
-    - `scale: 30`: Sets the spatial resolution (in meters) for the calculations.
+### **4. Define a Function to Calculate MNDWI**
+```javascript
+var calculateMNDWI = function(image) {
+  var nir = image.select('SR_B5'); // NIR band
+  var swir = image.select('SR_B6'); // SWIR band
+  var mndwi = nir.subtract(swir).divide(nir.add(swir)).rename('MNDWI');
+  return image.addBands(mndwi);
+};
+```
+- **Purpose**: Calculates the Modified Normalized Difference Water Index (MNDWI) for each image.
+1. **`image.select('SR_B5')`**: Selects the Near-Infrared (NIR) band from the image.
+2. **`image.select('SR_B6')`**: Selects the Shortwave Infrared (SWIR) band from the image.
+3. **`nir.subtract(swir).divide(nir.add(swir))`**: Computes the MNDWI using the formula:
+   \[
+   \text{MNDWI} = \frac{\text{NIR} - \text{SWIR}}{\text{NIR} + \text{SWIR}}
+   \]
+4. **`.rename('MNDWI')`**: Renames the resulting band as `MNDWI`.
+5. **`image.addBands(mndwi)`**: Adds the MNDWI band to the original image.
 
-7. **`setOptions({ ... });`**: Customizes the chart's appearance, including title, axis labels, line width, and point size.
+---
 
-8. **`print(chart);`**: Displays the generated chart in the Earth Engine console.
+### **5. Apply the MNDWI Calculation to the Image Collection**
+```javascript
+var mndwiCollection = collection.map(calculateMNDWI);
+```
+- **Purpose**: Applies the `calculateMNDWI` function to every image in the `collection`, creating a new collection with an added `MNDWI` band.
 
+---
 
-**Part 2: Calculating and Exporting Water Area**
+### **6. Create a Time Series Chart of MNDWI**
+```javascript
+var chart = ui.Chart.image.series({
+  imageCollection: mndwiCollection.select('MNDWI'),
+  region: geometry,
+  reducer: ee.Reducer.max(),
+  scale: 30
+}).setOptions({
+  title: 'MNDWI Time Series',
+  hAxis: {title: 'Date'},
+  vAxis: {title: 'MNDWI'},
+  lineWidth: 1,
+  pointSize: 3
+});
+```
+- **Purpose**: Creates a time series chart to visualize MNDWI changes over time.
+1. **`ui.Chart.image.series`**: Generates a time series chart from an image collection.
+2. **`imageCollection: mndwiCollection.select('MNDWI')`**: Uses only the `MNDWI` band from the `mndwiCollection`.
+3. **`region: geometry`**: Restricts the analysis to the `geometry` region.
+4. **`reducer: ee.Reducer.max()`**: Aggregates the maximum MNDWI value within the region for each image.
+5. **`scale: 30`**: Specifies the spatial resolution (30 meters per pixel, the resolution of Landsat 8).
+6. **`.setOptions({...})`**: Configures the chart's appearance (e.g., title, axis labels, line width, and point size).
 
-1. **`var calculateWaterArea = function(image) { ... };`**:  This function calculates the water area for each image.
-    - `var timestamp = ee.Date(image.get('system:time_start'));`: Gets the timestamp of the image.
-    - `var waterMask = image.select('MNDWI').gt(0);`: Creates a binary water mask by thresholding the MNDWI band. Pixels with MNDWI > 0 are considered water (value 1), others are not water (value 0).
-    - `var waterArea = waterMask.reduceRegion({ ... }).get('MNDWI');`: Calculates the sum of the pixels in the `waterMask` within the given region.  This effectively counts the water pixels. The scale is set to 30 meters.
-    - `var feature = ee.Feature(null, { ... });`: Creates a feature (a table row) with the timestamp and calculated water area.
-    - `return feature;`: Returns the created feature.
+---
 
-2. **`var waterAreas = mndwiCollection.map(calculateWaterArea);`**: Applies the `calculateWaterArea` function to each image in the `mndwiCollection`, creating a collection of features, where each feature represents the water area at a specific time.
+### **7. Display the Chart**
+```javascript
+print(chart);
+```
+- **Purpose**: Prints the MNDWI time series chart to the GEE console for visualization.
 
-3. **`print('Water areas for each image:', waterAreas);`**: Prints the `waterAreas` feature collection to the console.
+---
 
-4. **`Export.table.toDrive({ ... });`**: Exports the `waterAreas` feature collection to a CSV file in Google Drive.
-    - `collection: waterAreas`: Specifies the collection to export.
-    - `description: 'water_areas_by_time'`: Sets the description for the export task.
-    - `fileFormat: 'CSV'`: Specifies the output file format as CSV.
+### **8. Define a Function to Calculate Water Area**
+```javascript
+var calculateWaterArea = function(image) {
+  var timestamp = ee.Date(image.get('system:time_start'));
+  var waterMask = image.select('MNDWI').gt(0);
+  var waterArea = waterMask.reduceRegion({
+    reducer: ee.Reducer.sum(),
+    geometry: geometry,
+    scale: 30,
+    maxPixels: 1e9
+  }).get('MNDWI');
+  var feature = ee.Feature(null, {
+    'timestamp': timestamp,
+    'water_area': waterArea
+  });
+  return feature;
+};
+```
+1. **`ee.Date(image.get('system:time_start'))`**: Extracts the timestamp of the image.
+2. **`image.select('MNDWI').gt(0)`**: Creates a binary water mask where pixels with `MNDWI > 0` are classified as water.
+3. **`waterMask.reduceRegion({...})`**: Calculates the total water area:
+   - **`reducer: ee.Reducer.sum()`**: Sums all pixels classified as water.
+   - **`geometry: geometry`**: Restricts the calculation to the `geometry` region.
+   - **`scale: 30`**: Specifies the spatial resolution.
+   - **`maxPixels: 1e9`**: Sets a limit on the number of pixels processed.
+4. **`.get('MNDWI')`**: Retrieves the computed water area.
+5. **`ee.Feature(null, {...})`**: Creates a feature with properties for the timestamp and water area.
 
+---
 
+### **9. Apply the Water Area Calculation**
+```javascript
+var waterAreas = mndwiCollection.map(calculateWaterArea);
+```
+- **Purpose**: Applies the `calculateWaterArea` function to every image in the `mndwiCollection`, creating a collection of features with water area and timestamp.
+
+---
+
+### **10. Print the Water Areas**
+```javascript
+print('Water areas for each image:', waterAreas);
+```
+- **Purpose**: Prints the computed water areas for each image to the GEE console.
+
+---
+
+### **11. Export the Water Areas to a CSV File**
+```javascript
+Export.table.toDrive({
+  collection: waterAreas,
+  description: 'water_areas_by_time',
+  fileFormat: 'CSV'
+});
+```
+- **Purpose**: Exports the `waterAreas` feature collection as a CSV file to Google Drive.
+1. **`collection: waterAreas`**: Specifies the feature collection to export.
+2. **`description: 'water_areas_by_time'`**: Sets the export task name.
+3. **`fileFormat: 'CSV'`**: Specifies the output format as CSV.
+
+---
+
+### **Summary**
+- The script calculates the MNDWI for Landsat 8 images over a specified region and time range.
+- It generates a time series chart of MNDWI values.
+- It computes the water area for each image using a threshold on MNDWI and exports the results as a CSV file.
