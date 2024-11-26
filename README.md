@@ -49,9 +49,11 @@ var calculateMNDWI = function(image) {
 1. **`image.select('SR_B5')`**: Selects the Near-Infrared (NIR) band from the image.
 2. **`image.select('SR_B6')`**: Selects the Shortwave Infrared (SWIR) band from the image.
 3. **`nir.subtract(swir).divide(nir.add(swir))`**: Computes the MNDWI using the formula:
-   \[
-   \text{MNDWI} = \frac{\text{NIR} - \text{SWIR}}{\text{NIR} + \text{SWIR}}
-   \]
+
+```javascript
+   MNDWI = {NIR} - {SWIR} / {NIR} + {SWIR}
+```
+   
 4. **`.rename('MNDWI')`**: Renames the resulting band as `MNDWI`.
 5. **`image.addBands(mndwi)`**: Adds the MNDWI band to the original image.
 
